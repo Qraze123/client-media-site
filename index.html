@@ -4,8 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Client Media Uploader</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <style>
     body {
@@ -40,48 +38,60 @@
   <div class="gallery" id="gallery"></div>
 
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyCtmeLaYYwcVjPdr42PkvWM1_MTnHJqLj0",
-      authDomain: "client-media-cea00.firebaseapp.com",
-      projectId: "client-media-cea00",
-      storageBucket: "client-media-cea00.appspot.com",
-      messagingSenderId: "623340195517",
-      appId: "1:623340195517:web:d0167719eab02bdb63b1d4"
-    };
+    async function uploadFile() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+      if (!file) return alert("Please select a file");
 
-    firebase.initializeApp(firebaseConfig);
-    const storage = firebase.storage();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("filename", file.name);
 
-    function uploadFile() {
-      const file = document.getElementById("fileInput").files[0];
-      if (!file) return alert("Please select a file.");
-
-      const ref = storage.ref().child(`uploads/${Date.now()}_${file.name}`);
-      ref.put(file).then(snapshot => {
-        snapshot.ref.getDownloadURL().then(url => {
-          showUploadedItem(url, file.type);
-        });
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
       });
+
+      const data = await response.json();
+      if (data.success) {
+        showUploadedItem(data.url, file.type);
+      } else {
+        alert("Upload failed: " + (data.error || "unknown error"));
+      }
+    }
+
+    function sanitizeId(url) {
+      return url.replace(/[^a-zA-Z0-9]/g, "");
     }
 
     function showUploadedItem(url, type) {
       const gallery = document.getElementById("gallery");
       const div = document.createElement("div");
       div.className = "item";
+
+      const safeId = sanitizeId(url);
+      let mediaHTML = "";
+
       if (type.startsWith("image")) {
-        div.innerHTML = `<img src="${url}" width="300" /><div id="qrcode-${url}"></div>`;
+        mediaHTML = `<img src="${url}" width="300" />`;
       } else if (type.startsWith("video")) {
-        div.innerHTML = `<video controls src="${url}" width="300"></video><div id="qrcode-${url}"></div>`;
+        mediaHTML = `<video controls src="${url}" width="300"></video>`;
       } else if (type.startsWith("audio")) {
-        div.innerHTML = `<audio controls src="${url}"></audio><div id="qrcode-${url}"></div>`;
+        mediaHTML = `<audio controls src="${url}"></audio>`;
       } else {
-        div.innerHTML = `<a href="${url}" target="_blank">${url}</a><div id="qrcode-${url}"></div>`;
+        mediaHTML = `<a href="${url}" target="_blank">${url}</a>`;
       }
+
+      div.innerHTML = `${mediaHTML}<div id="qrcode-${safeId}"></div>`;
       gallery.prepend(div);
-      QRCode.toCanvas(document.createElement('canvas'), url, function (error, canvas) {
-        if (!error) div.querySelector(`#qrcode-${url.replace(/[^a-zA-Z0-9]/g, '')}`).appendChild(canvas);
+
+      QRCode.toCanvas(url, function (error, canvas) {
+        if (!error) {
+          document.getElementById(`qrcode-${safeId}`).appendChild(canvas);
+        }
       });
     }
   </script>
 </body>
 </html>
+
